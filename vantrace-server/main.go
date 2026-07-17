@@ -36,9 +36,26 @@ func main() {
 	mux.HandleFunc("POST /runs/{id}/finish", finishRunHandler(db))
 	mux.HandleFunc("GET /runs", listRunsHandler(db))
 
+	handler := corsMiddleware(mux)
+
 	addr := ":6789"
 	log.Printf("vantrace-server starting on %s (db: %s)", addr, dbPath)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
