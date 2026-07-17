@@ -12,6 +12,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	dbDir := filepath.Join(homeDir, ".vantrace")
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
 		log.Fatal(err)
@@ -23,6 +24,12 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
+
+	artifactDir := filepath.Join(dbDir, "artifacts")
+	storage, err := NewLocalStorage(artifactDir)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	mux := http.NewServeMux()
 
@@ -36,6 +43,9 @@ func main() {
 	mux.HandleFunc("POST /runs/{id}/finish", finishRunHandler(db))
 	mux.HandleFunc("GET /runs", listRunsHandler(db))
 	mux.HandleFunc("GET /runs/{id}/metrics", getRunMetricsHandler(db))
+	mux.HandleFunc("POST /runs/{id}/artifacts", uploadArtifactHandler(db, storage))
+	mux.HandleFunc("GET /runs/{id}/artifacts", listRunArtifactsHandler(db))
+	mux.HandleFunc("GET /artifacts/{hash}", downloadArtifactHandler(storage, db))
 
 	handler := corsMiddleware(mux)
 

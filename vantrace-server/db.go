@@ -30,6 +30,20 @@ func openDB(path string) (*sql.DB, error) {
 		timestamp REAL
 	);
 	CREATE INDEX IF NOT EXISTS idx_metrics_run_id ON metrics(run_id);
+	CREATE TABLE IF NOT EXISTS artifacts (
+		hash TEXT PRIMARY KEY,
+		filename TEXT,
+		size INTEGER,
+		content_type TEXT,
+		created_at REAL
+	);
+	CREATE TABLE IF NOT EXISTS run_artifacts (
+		run_id TEXT,
+		hash TEXT,
+		role TEXT,
+		logged_at REAL
+	);
+	CREATE INDEX IF NOT EXISTS idx_run_artifacts_run_id ON run_artifacts(run_id);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err
