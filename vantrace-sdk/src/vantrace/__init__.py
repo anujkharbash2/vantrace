@@ -5,6 +5,7 @@ import uuid
 import queue
 import threading
 import atexit
+import shutil
 from pathlib import Path
 
 import requests
@@ -73,6 +74,7 @@ class Run:
         self.id = str(uuid.uuid4())[:8]
         label = self.name if self.name else "run"
         db_path = _DB_DIR / self.project / f"{label}-{self.id}.db"
+        self._conn_path = db_path
         self._conn = _init_local_db(db_path)
         self._conn.execute("INSERT INTO run_meta VALUES (?, ?)", ("config", json.dumps(self.config)))
         self._conn.execute("INSERT INTO run_meta VALUES (?, ?)", ("started_at", str(time.time())))
@@ -126,6 +128,45 @@ class Run:
         for key, value in metrics.items():
             self._queue.put((step, key, float(value), ts))
 
+    def log_artifact(self, path: str, role: str = "output") -> str:
+        """Attach a file to this run. Returns the artifact's content hash (server mode)
+        or local storage path (local mode)."""
+        file_path = Path(path)
+        if not file_path.exists():
+            raise FileNotFoundError(f"Artifact file not found: {path}")
+
+        if self._use_server:
+            return self._log_artifact_server(file_path, role)
+        else:
+            return self._log_artifact_local(file_path, role)
+
+    def _log_artifact_server(self, file_path: Path, role: str) -> str:
+        with open(file_path, "rb") as f:
+            resp = requests.post(
+                f"{_SERVER_URL}/runs/{self.id}/artifacts",
+                files={"file": (file_path.name, f)},
+                data={"role": role},
+                timeout=30,
+            )
+        resp.raise_for_status()
+        result = resp.json()
+        print(f"[vantrace] artifact logged: {file_path.name} ({result['size']} bytes, hash={result['hash'][:8]})")
+        return result["hash"]
+
+    def _log_artifact_local(self, file_path: Path, role: str) -> str:
+        artifact_dir = self._conn_path.parent / "artifacts"
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        dest = artifact_dir / file_path.name
+        shutil.copy2(file_path, dest)
+
+        self._conn.execute(
+            "INSERT INTO run_meta VALUES (?, ?)",
+            (f"artifact:{file_path.name}", json.dumps({"role": role, "path": str(dest)})),
+        )
+        self._conn.commit()
+        print(f"[vantrace] artifact logged (local mode): {file_path.name} -> {dest}")
+        return str(dest)
+
     def finish(self):
         self._stop.set()
         self._writer_thread.join()
@@ -154,6 +195,12 @@ def log(metrics: dict, step: int | None = None):
     if _active_run is None:
         raise RuntimeError("vantrace.init() must be called before vantrace.log()")
     _active_run.log(metrics, step=step)
+
+
+def log_artifact(path: str, role: str = "output") -> str:
+    if _active_run is None:
+        raise RuntimeError("vantrace.init() must be called before vantrace.log_artifact()")
+    return _active_run.log_artifact(path, role=role)
 
 
 def finish():

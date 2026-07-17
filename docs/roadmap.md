@@ -2,7 +2,6 @@
 ### Open-source, local-first experiment tracking + LLM observability
  
 ---
- 
 ## 1. Positioning (recap)
  
 **Core thesis:** A genuinely open-source, local-first ML experiment tracking platform — SDK, server, and dashboard all free and self-hostable by default — with native LLM/agent tracing built in as one integrated capability, not bolted on.
@@ -165,6 +164,17 @@ To make sure nothing gets dropped as scope grows, treat these as permanent paral
   - Sparse per-epoch logging (val_loss/val_accuracy, 3 points) also handled correctly
   - Full pipeline held up under real research-scale usage, not just synthetic test data
 - **v0.1 is proven, not just built.** Ready to move to Phase 2.
+## Phase 2 progress
+ 
+- ✅ Storage interface (`Storage`) designed as pluggable — local disk implemented now, S3-compatible backend can be added later without changing callers
+- ✅ Content-addressed local storage: files hashed (SHA-256), deduped, stored in git-style `xx/yyyy...` layout
+- ✅ `artifacts` + `run_artifacts` tables added to schema (tracks hash/filename/size/content-type, and per-run role: "output" or "input" — this is what will drive lineage)
+- ✅ Endpoints built and verified end-to-end: `POST /runs/{id}/artifacts` (upload), `GET /runs/{id}/artifacts` (list), `GET /artifacts/{hash}` (download)
+- ✅ Full round-trip confirmed via curl: upload → hash → stored → listed → downloaded byte-identical
+- ⬜ SDK API (`run.log_artifact()`) — **next up**
+- ⬜ Dashboard artifact browser UI
+**Next step:** add `log_artifact()` to the Python SDK so researchers can actually attach files (checkpoints, datasets) to a run from their training code, not just via raw curl.
+ 
 ## 7. Decision Log
  
 | Date | Decision | Reasoning |
@@ -187,3 +197,4 @@ To make sure nothing gets dropped as scope grows, treat these as permanent paral
 The single highest-leverage task right now: **lock the ingestion API schema** (Phase 0). Everything — SDK, server, dashboard — depends on it, and changing it later is expensive across three parallel tracks.
  
 I can draft that schema (metrics, config, artifacts, system-stats, trace spans) as a concrete spec next, or scaffold the actual `vantrace-sdk` Python package structure — whichever you want to start with.
+ 
