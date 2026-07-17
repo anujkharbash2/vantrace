@@ -3,7 +3,7 @@ name = "vantrace"
 version = "0.1.0"
 description = "Local-first, open-source ML experiment tracking SDK"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["requests"]
 
 [build-system]
 requires = ["hatchling"]

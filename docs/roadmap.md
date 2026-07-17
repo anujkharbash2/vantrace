@@ -142,10 +142,18 @@ To make sure nothing gets dropped as scope grows, treat these as permanent paral
 - ✅ Config/hyperparameter retrieval — stored and queryable via CLI
 - ✅ `vantrace` CLI built: `vantrace list` (all runs, step counts, status), `vantrace show <run_id_or_project>` (config, metrics, falls back to latest run if given a project name)
 - ✅ Second commit pushed: "feat: vantrace CLI - list and show runs from terminal"
-- ⬜ Go server (not started) — **next up**
+- ✅ Go server (`vantrace-server`) built and verified end-to-end:
+  - `GET /health`
+  - `POST /runs` (create run + config)
+  - `POST /runs/{id}/metrics` (log metric points)
+  - `POST /runs/{id}/finish`
+  - `GET /runs` (list all runs)
+  - Backed by SQLite via pure-Go driver (`modernc.org/sqlite` — avoids CGO/C-compiler dependency on macOS)
+  - Full chain confirmed: HTTP request → Go handler → SQLite write → readable back out
 - ⬜ Dashboard (not started)
+- ⬜ SDK not yet wired to talk to the server over HTTP (still writes to its own local SQLite file directly) — **next up**
 
-**Next step:** start the Go server (`vantrace-server`) — the ingestion API that the dashboard will eventually talk to, and the piece that fixes W&B's "logging blocks training at scale" weakness.
+**Next step:** wire `vantrace-sdk` to optionally send data to `vantrace-server` over HTTP instead of writing straight to local SQLite. This unlocks live dashboard data during training and is a fairly small change since the SDK's async queue logic already exists — it just needs an HTTP-sending backend as an alternative to the local-file backend.
 
 ## 7. Decision Log
 
@@ -158,6 +166,8 @@ To make sure nothing gets dropped as scope grows, treat these as permanent paral
 | 2026-07-17 | Async writer thread + queue for `log()` calls | Directly addresses documented W&B complaint: synchronous logging slows down training loop |
 | 2026-07-17 | CLI viewer built before the Go server/dashboard | Fastest path to a usable feedback loop — verify SDK data is correct and inspectable before investing in server/UI layers |
 | 2026-07-17 | `vantrace show <name>` falls back to matching by project name (shows latest run) if no run ID matches | Real usage pattern — people will type the project name far more often than a specific run ID |
+| 2026-07-18 | Used `modernc.org/sqlite` (pure Go) instead of `mattn/go-sqlite3` for the server's DB driver | Avoids CGO/C-compiler toolchain requirement — keeps `go build` simple and portable, especially for a single-binary local install philosophy |
+| 2026-07-18 | Server owns a separate SQLite DB (`~/.vantrace/server.db`) from the SDK's local-only DB | Server mode and local-only mode are two independent paths for now; unifying them is the next step (SDK → HTTP → server) |
 
 ## 8. Immediate next step
 
