@@ -150,10 +150,18 @@ To make sure nothing gets dropped as scope grows, treat these as permanent paral
   - `GET /runs` (list all runs)
   - Backed by SQLite via pure-Go driver (`modernc.org/sqlite` — avoids CGO/C-compiler dependency on macOS)
   - Full chain confirmed: HTTP request → Go handler → SQLite write → readable back out
-- ⬜ Dashboard (not started)
-- ⬜ SDK not yet wired to talk to the server over HTTP (still writes to its own local SQLite file directly) — **next up**
+- ✅ SDK wired to server over HTTP with automatic fallback:
+  - Tries `GET /health` on init; if server's up, sends run/metrics/finish via HTTP
+  - If no server detected, falls back to local-only SQLite (original v0.1 behavior), with a console note telling the user how to enable server mode
+  - Verified both modes end-to-end (server mode confirmed via `curl`, local mode confirmed via `vantrace list`)
+- ✅ Dashboard (`vantrace-dashboard`) scaffolded and live:
+  - Vite + React + TypeScript + Tailwind v4 (via `@tailwindcss/vite` plugin) + TanStack Query
+  - Run list screen polling `GET /runs` every 2s, dark theme, status/duration columns
+  - CORS middleware added to Go server (`Access-Control-Allow-Origin`) to unblock browser requests from `:5173` to `:6789`
+- ⬜ Per-run metrics endpoint on server (`GET /runs/{id}/metrics`) — **next up**
+- ⬜ Per-run chart view with uPlot (click into a run, see live loss/accuracy curves)
 
-**Next step:** wire `vantrace-sdk` to optionally send data to `vantrace-server` over HTTP instead of writing straight to local SQLite. This unlocks live dashboard data during training and is a fairly small change since the SDK's async queue logic already exists — it just needs an HTTP-sending backend as an alternative to the local-file backend.
+**Next step:** add a `GET /runs/{id}/metrics` endpoint to the Go server, then build the per-run detail screen in the dashboard with a live-updating uPlot chart — this is the feature that makes the tool feel like a real training monitor, not just a run list.
 
 ## 7. Decision Log
 

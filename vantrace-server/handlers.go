@@ -128,3 +128,36 @@ func listRunsHandler(db *sql.DB) http.HandlerFunc {
 		json.NewEncoder(w).Encode(results)
 	}
 }
+
+func getRunMetricsHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		runID := r.PathValue("id")
+
+		rows, err := db.Query(
+			`SELECT step, key, value FROM metrics WHERE run_id = ? ORDER BY step ASC`,
+			runID,
+		)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		type point struct {
+			Step  int     `json:"step"`
+			Key   string  `json:"key"`
+			Value float64 `json:"value"`
+		}
+
+		var results []point
+		for rows.Next() {
+			var p point
+			if err := rows.Scan(&p.Step, &p.Key, &p.Value); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			results = append(results, p)
+		}
+		json.NewEncoder(w).Encode(results)
+	}
+}

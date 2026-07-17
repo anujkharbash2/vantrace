@@ -35,6 +35,7 @@ func main() {
 	mux.HandleFunc("POST /runs/{id}/metrics", logMetricsHandler(db))
 	mux.HandleFunc("POST /runs/{id}/finish", finishRunHandler(db))
 	mux.HandleFunc("GET /runs", listRunsHandler(db))
+	mux.HandleFunc("GET /runs/{id}/metrics", getRunMetricsHandler(db))
 
 	handler := corsMiddleware(mux)
 
