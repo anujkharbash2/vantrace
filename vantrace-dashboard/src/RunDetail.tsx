@@ -26,49 +26,61 @@ function groupByKey(points: MetricPoint[]): Record<string, MetricPoint[]> {
 }
 
 function MetricChart({ metricKey, points }: { metricKey: string; points: MetricPoint[] }) {
-  const containerRef = useRef<HTMLDivElement>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
   const plotRef = useRef<uPlot | null>(null)
 
+  // create once
   useEffect(() => {
-    if (!containerRef.current) return
+    if (!wrapperRef.current) return
 
-    const steps = points.map((p) => p.step)
-    const values = points.map((p) => p.value)
-    const data: uPlot.AlignedData = [steps, values]
+    const opts: uPlot.Options = {
+      width: wrapperRef.current.clientWidth,
+      height: 200,
+      title: metricKey,
+      scales: { x: { time: false } },
+      series: [
+        { label: 'step' },
+        { label: metricKey, stroke: '#f0a23c', width: 2 },
+      ],
+      axes: [
+        { stroke: '#8b8b93', grid: { stroke: '#27272c' } },
+        { stroke: '#8b8b93', grid: { stroke: '#27272c' } },
+      ],
+    }
+    plotRef.current = new uPlot(opts, [[], []], wrapperRef.current)
 
-    if (!plotRef.current) {
-      const opts: uPlot.Options = {
-        width: 560,
-        height: 220,
-        title: metricKey,
-        scales: { x: { time: false } },
-        series: [
-          { label: 'step' },
-          { label: metricKey, stroke: '#22d3ee', width: 2 },
-        ],
-        axes: [
-          { stroke: '#71717a', grid: { stroke: '#27272a' } },
-          { stroke: '#71717a', grid: { stroke: '#27272a' } },
-        ],
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width
+      if (width && plotRef.current) {
+        plotRef.current.setSize({ width, height: 200 })
       }
-      plotRef.current = new uPlot(opts, data, containerRef.current)
-    } else {
-      plotRef.current.setData(data)
-    }
+    })
+    observer.observe(wrapperRef.current)
 
     return () => {
-      // keep plot alive across re-renders; only destroy on unmount
-    }
-  }, [points, metricKey])
-
-  useEffect(() => {
-    return () => {
+      observer.disconnect()
       plotRef.current?.destroy()
       plotRef.current = null
     }
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metricKey])
 
-  return <div ref={containerRef} className="bg-zinc-900 rounded-lg p-3" />
+  // update data
+  useEffect(() => {
+    if (!plotRef.current) return
+    const steps = points.map((p) => p.step)
+    const values = points.map((p) => p.value)
+    plotRef.current.setData([steps, values])
+  }, [points])
+
+  return (
+    <div className="border border-[var(--color-border)] rounded-lg p-4 bg-[var(--color-surface)]">
+      <p className="text-xs font-mono text-[var(--color-muted)] mb-2 uppercase tracking-wide">
+        {metricKey}
+      </p>
+      <div ref={wrapperRef} className="w-full" />
+    </div>
+  )
 }
 
 export function RunDetail({ runId, onBack }: { runId: string; onBack: () => void }) {
@@ -84,15 +96,15 @@ export function RunDetail({ runId, onBack }: { runId: string; onBack: () => void
     <div>
       <button
         onClick={onBack}
-        className="text-zinc-400 hover:text-zinc-100 text-sm mb-4"
+        className="text-[var(--color-muted)] hover:text-[var(--color-ink)] text-sm mb-5 transition-colors"
       >
         ← back to runs
       </button>
-      <h2 className="text-lg font-semibold mb-4 font-mono">{runId}</h2>
+      <h2 className="text-base font-mono text-[var(--color-ink)] mb-6">{runId}</h2>
 
-      {isLoading && <p className="text-zinc-500">Loading metrics…</p>}
+      {isLoading && <p className="text-[var(--color-muted)] text-sm">Loading metrics…</p>}
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {Object.entries(grouped).map(([key, points]) => (
           <MetricChart key={key} metricKey={key} points={points} />
         ))}
