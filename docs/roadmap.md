@@ -1,5 +1,5 @@
 # Anvesh Labs — Product & Build Roadmap
-### Open-source, local-first experiment tracking + LLM observability 
+### Open-source, local-first experiment tracking + LLM observability (W&B replacement)
 
 ---
 
@@ -139,12 +139,13 @@ To make sure nothing gets dropped as scope grows, treat these as permanent paral
   - Verified working end-to-end with a live test script
   - Installed in editable mode, importable as `import vantrace`
 - ✅ First commit pushed to `main` (`556f09e`): "feat: v0.1 SDK core - init/log/finish with async local SQLite writes"
-- ⬜ Config/hyperparameter retrieval (currently stored, not yet queryable)
-- ⬜ CLI to list/inspect runs from terminal
-- ⬜ Go server (not started)
+- ✅ Config/hyperparameter retrieval — stored and queryable via CLI
+- ✅ `vantrace` CLI built: `vantrace list` (all runs, step counts, status), `vantrace show <run_id_or_project>` (config, metrics, falls back to latest run if given a project name)
+- ✅ Second commit pushed: "feat: vantrace CLI - list and show runs from terminal"
+- ⬜ Go server (not started) — **next up**
 - ⬜ Dashboard (not started)
 
-**Next decision point:** build a `vantrace` CLI viewer (fast, stays in Python) vs. start the Go server (unblocks the dashboard track).
+**Next step:** start the Go server (`vantrace-server`) — the ingestion API that the dashboard will eventually talk to, and the piece that fixes W&B's "logging blocks training at scale" weakness.
 
 ## 7. Decision Log
 
@@ -155,6 +156,8 @@ To make sure nothing gets dropped as scope grows, treat these as permanent paral
 | 2026-07-17 | SQLite for local mode, Postgres planned for team mode (Phase 4) | Zero-config local start, swap-in path to scale later without changing API contract |
 | 2026-07-17 | `name` param defaults to `None` (not `self.id`) to avoid duplicated run filenames | Caught during first live test — filename was `id-id.db` |
 | 2026-07-17 | Async writer thread + queue for `log()` calls | Directly addresses documented W&B complaint: synchronous logging slows down training loop |
+| 2026-07-17 | CLI viewer built before the Go server/dashboard | Fastest path to a usable feedback loop — verify SDK data is correct and inspectable before investing in server/UI layers |
+| 2026-07-17 | `vantrace show <name>` falls back to matching by project name (shows latest run) if no run ID matches | Real usage pattern — people will type the project name far more often than a specific run ID |
 
 ## 8. Immediate next step
 
