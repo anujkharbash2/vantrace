@@ -17,8 +17,10 @@ build/
 .DS_Store
 
 # Docker
-*.log.venv/
-__pycache__/
+*.log
+
+
+
 *.egg-info/
 *.db
 *.pyc
