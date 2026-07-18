@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { LineagePanel } from './Lineage'
 
 const SERVER_URL = 'http://localhost:6789'
 
@@ -39,6 +40,7 @@ async function fetchRegistry(project: string): Promise<RegistryEntry[]> {
 
 export function Registry() {
   const [selectedProject, setSelectedProject] = useState<string | null>(null)
+  const [expandedHash, setExpandedHash] = useState<string | null>(null)
 
   const { data: runs } = useQuery({ queryKey: ['runs'], queryFn: fetchRuns })
 
@@ -126,8 +128,15 @@ export function Registry() {
                   <td className="py-2.5 px-4 text-[var(--color-muted)] font-mono text-xs">
                     {formatBytes(entry.size)}
                   </td>
-                  <td className="py-2.5 px-4 text-[var(--color-muted)] font-mono text-xs">
-                    {entry.hash.slice(0, 8)}
+                  <td className="py-2.5 px-4">
+                    <button
+                      onClick={() =>
+                        setExpandedHash(expandedHash === entry.hash ? null : entry.hash)
+                      }
+                      className="text-[var(--color-muted)] font-mono text-xs hover:text-[var(--color-accent)] hover:underline"
+                    >
+                      {entry.hash.slice(0, 8)}
+                    </button>
                   </td>
                   <td className="py-2.5 px-4">
                     
@@ -143,6 +152,10 @@ export function Registry() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {expandedHash && (
+        <LineagePanel hash={expandedHash} onClose={() => setExpandedHash(null)} />
       )}
     </div>
   )
