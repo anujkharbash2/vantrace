@@ -134,3 +134,40 @@ func listRunArtifactsHandler(db *sql.DB) http.HandlerFunc {
 		json.NewEncoder(w).Encode(results)
 	}
 }
+
+type LineageEntry struct {
+	RunID    string  `json:"run_id"`
+	Project  string  `json:"project"`
+	Role     string  `json:"role"`
+	LoggedAt float64 `json:"logged_at"`
+}
+
+func artifactLineageHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		hash := r.PathValue("hash")
+
+		rows, err := db.Query(`
+			SELECT ra.run_id, r.project, ra.role, ra.logged_at
+			FROM run_artifacts ra
+			JOIN runs r ON r.id = ra.run_id
+			WHERE ra.hash = ?
+			ORDER BY ra.logged_at ASC
+		`, hash)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		var results []LineageEntry
+		for rows.Next() {
+			var e LineageEntry
+			if err := rows.Scan(&e.RunID, &e.Project, &e.Role, &e.LoggedAt); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			results = append(results, e)
+		}
+		json.NewEncoder(w).Encode(results)
+	}
+}

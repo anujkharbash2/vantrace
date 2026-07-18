@@ -48,6 +48,7 @@ func main() {
 	mux.HandleFunc("GET /artifacts/{hash}", downloadArtifactHandler(storage, db))
 	mux.HandleFunc("POST /projects/{project}/registry", promoteArtifactHandler(db))
 	mux.HandleFunc("GET /projects/{project}/registry", listRegistryHandler(db))
+	mux.HandleFunc("GET /artifacts/{hash}/lineage", artifactLineageHandler(db))
 
 	handler := corsMiddleware(mux)
 
