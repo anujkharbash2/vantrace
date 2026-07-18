@@ -131,6 +131,10 @@ func listRunArtifactsHandler(db *sql.DB) http.HandlerFunc {
 			}
 			results = append(results, i)
 		}
+		if err := rows.Err(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		json.NewEncoder(w).Encode(results)
 	}
 }
@@ -167,6 +171,10 @@ func artifactLineageHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 			results = append(results, e)
+		}
+		if err := rows.Err(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		json.NewEncoder(w).Encode(results)
 	}

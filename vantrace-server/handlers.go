@@ -142,6 +142,10 @@ func listRunsHandler(db *sql.DB) http.HandlerFunc {
 			}
 			results = append(results, rs)
 		}
+		if err := rows.Err(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		json.NewEncoder(w).Encode(results)
 	}
 }
@@ -174,6 +178,10 @@ func getRunMetricsHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 			results = append(results, p)
+		}
+		if err := rows.Err(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		json.NewEncoder(w).Encode(results)
 	}
