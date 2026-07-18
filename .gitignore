@@ -24,3 +24,15 @@ build/
 *.egg-info/
 *.db
 *.pyc
+
+# Local test artifacts / data
+data/
+*.pt
+downloaded_*
+fake_checkpoint.pt
+test_model.txt
+
+# Local test artifacts / data
+data/
+*.pt
+downloaded_*
