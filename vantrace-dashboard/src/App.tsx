@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { RunDetail } from './RunDetail'
+import { Registry } from './Registry'
 
 const SERVER_URL = 'http://localhost:6789'
 
@@ -44,7 +45,7 @@ function StatusBadge({ finished }: { finished: boolean }) {
 
 function App() {
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
-
+  const [activeTab, setActiveTab] = useState<'runs' | 'registry'>('runs')
   const { data: runs, isLoading, error } = useQuery({
     queryKey: ['runs'],
     queryFn: fetchRuns,
@@ -60,11 +61,35 @@ function App() {
           <p className="text-[var(--color-muted)] text-sm mt-3">
             Local-first experiment tracking
           </p>
+          <div className="flex gap-1 mt-5">
+            <button
+              onClick={() => { setActiveTab('runs'); setSelectedRunId(null) }}
+              className={`text-sm px-3 py-1.5 rounded-md transition-colors ${
+                activeTab === 'runs'
+                  ? 'bg-[var(--color-surface)] text-[var(--color-ink)]'
+                  : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'
+              }`}
+            >
+              Runs
+            </button>
+            <button
+              onClick={() => setActiveTab('registry')}
+              className={`text-sm px-3 py-1.5 rounded-md transition-colors ${
+                activeTab === 'registry'
+                  ? 'bg-[var(--color-surface)] text-[var(--color-ink)]'
+                  : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'
+              }`}
+            >
+              Registry
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-8 sm:px-10">
-        {selectedRunId ? (
+        {activeTab === 'registry' ? (
+          <Registry />
+        ) : selectedRunId ? (
           <RunDetail runId={selectedRunId} onBack={() => setSelectedRunId(null)} />
         ) : (
           <>
