@@ -39,20 +39,6 @@ def evaluate(model, loader, device):
     return correct / total
 
 
-def grid_search(search_space: dict) -> list[dict]:
-    keys = list(search_space.keys())
-    values = list(search_space.values())
-    return [dict(zip(keys, combo)) for combo in product(*values)]
-
-
-def run_sweep(configs: list[dict], train_fn) -> dict:
-    results = []
-    for config in configs:
-        score = train_fn(config)
-        result = config.copy()
-        result["score"] = score
-        results.append(result)
-    return max(results, key=lambda x: x["score"])
 
 
 def train_fn(config: dict, device, train_set, val_set) -> float:

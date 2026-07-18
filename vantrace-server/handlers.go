@@ -101,7 +101,17 @@ func finishRunHandler(db *sql.DB) http.HandlerFunc {
 
 func listRunsHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		rows, err := db.Query(`SELECT id, project, name, started_at, finished_at FROM runs ORDER BY started_at DESC`)
+		project := r.URL.Query().Get("project")
+
+		query := `SELECT id, project, name, config, started_at, finished_at FROM runs`
+		args := []interface{}{}
+		if project != "" {
+			query += ` WHERE project = ?`
+			args = append(args, project)
+		}
+		query += ` ORDER BY started_at DESC`
+
+		rows, err := db.Query(query, args...)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -109,19 +119,26 @@ func listRunsHandler(db *sql.DB) http.HandlerFunc {
 		defer rows.Close()
 
 		type runSummary struct {
-			ID         string   `json:"id"`
-			Project    string   `json:"project"`
-			Name       string   `json:"name"`
-			StartedAt  float64  `json:"started_at"`
-			FinishedAt *float64 `json:"finished_at"`
+			ID         string          `json:"id"`
+			Project    string          `json:"project"`
+			Name       string          `json:"name"`
+			Config     json.RawMessage `json:"config"`
+			StartedAt  float64         `json:"started_at"`
+			FinishedAt *float64        `json:"finished_at"`
 		}
 
 		var results []runSummary
 		for rows.Next() {
 			var rs runSummary
-			if err := rows.Scan(&rs.ID, &rs.Project, &rs.Name, &rs.StartedAt, &rs.FinishedAt); err != nil {
+			var configStr sql.NullString
+			if err := rows.Scan(&rs.ID, &rs.Project, &rs.Name, &configStr, &rs.StartedAt, &rs.FinishedAt); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
+			}
+			if configStr.Valid && configStr.String != "" {
+				rs.Config = json.RawMessage(configStr.String)
+			} else {
+				rs.Config = json.RawMessage("{}")
 			}
 			results = append(results, rs)
 		}

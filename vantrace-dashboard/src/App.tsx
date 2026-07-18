@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { RunDetail } from './RunDetail'
 import { Registry } from './Registry'
+import { Leaderboard } from './Leaderboard'
 
 
 const SERVER_URL = 'http://localhost:6789'
@@ -46,7 +47,7 @@ function StatusBadge({ finished }: { finished: boolean }) {
 
 function App() {
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'runs' | 'registry'>('runs')
+  const [activeTab, setActiveTab] = useState<'runs' | 'registry' | 'leaderboard'>('runs')
   const { data: runs, isLoading, error } = useQuery({
     queryKey: ['runs'],
     queryFn: fetchRuns,
@@ -83,6 +84,16 @@ function App() {
             >
               Registry
             </button>
+            <button
+              onClick={() => setActiveTab('leaderboard')}
+              className={`text-sm px-3 py-1.5 rounded-md transition-colors ${
+                activeTab === 'leaderboard'
+                  ? 'bg-[var(--color-surface)] text-[var(--color-ink)]'
+                  : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'
+              }`}
+            >
+              Leaderboard
+            </button>
           </div>
         </div>
       </header>
@@ -90,6 +101,8 @@ function App() {
       <main className="max-w-5xl mx-auto px-6 py-8 sm:px-10">
         {activeTab === 'registry' ? (
           <Registry />
+        ) : activeTab === 'leaderboard' ? (
+          <Leaderboard />
         ) : selectedRunId ? (
           <RunDetail runId={selectedRunId} onBack={() => setSelectedRunId(null)} />
         ) : (
