@@ -46,6 +46,8 @@ func main() {
 	mux.HandleFunc("POST /runs/{id}/artifacts", uploadArtifactHandler(db, storage))
 	mux.HandleFunc("GET /runs/{id}/artifacts", listRunArtifactsHandler(db))
 	mux.HandleFunc("GET /artifacts/{hash}", downloadArtifactHandler(storage, db))
+	mux.HandleFunc("POST /projects/{project}/registry", promoteArtifactHandler(db))
+	mux.HandleFunc("GET /projects/{project}/registry", listRegistryHandler(db))
 
 	handler := corsMiddleware(mux)
 

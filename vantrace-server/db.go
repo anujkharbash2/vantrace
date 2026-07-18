@@ -44,6 +44,13 @@ func openDB(path string) (*sql.DB, error) {
 		logged_at REAL
 	);
 	CREATE INDEX IF NOT EXISTS idx_run_artifacts_run_id ON run_artifacts(run_id);
+	CREATE TABLE IF NOT EXISTS registry_tags (
+		project TEXT,
+		tag TEXT,
+		hash TEXT,
+		updated_at REAL,
+		PRIMARY KEY (project, tag)
+	);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err

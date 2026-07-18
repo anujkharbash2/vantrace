@@ -4,7 +4,7 @@
 ---
 ## 1. Positioning (recap)
  
-**Core thesis:** A genuinely open-source, local-first ML experiment tracking platform — SDK, server, and dashboard all free and self-hostable by default — with native LLM/agent tracing built in as one integrated capability, not bolted on.
+**Core thesis:** A genuinely open-source, local-first ML experiment tracking platform SDK, server, and dashboard all free and self-hostable by default with native LLM/agent tracing built in as one integrated capability, not bolted on.
  
 **Primary wedge:** classic ML experiment tracking (larger market, less contested).
 **Secondary differentiator:** unified LLM tracing in the same tool (nobody open-source does both well).
