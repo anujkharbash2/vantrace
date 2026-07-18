@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { RunDetail } from './RunDetail'
 import { Registry } from './Registry'
-import { LineagePanel } from './Lineage'
+
 
 const SERVER_URL = 'http://localhost:6789'
 
