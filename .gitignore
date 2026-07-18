@@ -36,3 +36,4 @@ test_model.txt
 data/
 *.pt
 downloaded_*
+docs/roadmap.md
