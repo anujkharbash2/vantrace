@@ -61,13 +61,14 @@ function MetricChart({ metricKey, points }: { metricKey: string; points: MetricP
       scales: { x: { time: false } },
       series: [
         { label: 'step' },
-        { label: metricKey, stroke: '#f0a23c', width: 2 },
+        { label: metricKey, stroke: '#c2410c', width: 2 },
       ],
       axes: [
-        { stroke: '#8b8b93', grid: { stroke: '#27272c' } },
-        { stroke: '#8b8b93', grid: { stroke: '#27272c' } },
+        { stroke: '#8a877d', grid: { stroke: '#ece9df' } },
+        { stroke: '#8a877d', grid: { stroke: '#ece9df' } },
       ],
     }
+
     plotRef.current = new uPlot(opts, [[], []], wrapperRef.current)
 
     const observer = new ResizeObserver((entries) => {

@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { RunDetail } from './RunDetail'
 import { Registry } from './Registry'
 import { Leaderboard } from './Leaderboard'
-
+import { Workspace } from './Workspace'
+import { RunsTable } from './RunsTable'
 
 const SERVER_URL = 'http://localhost:6789'
 
@@ -11,166 +12,170 @@ interface RunSummary {
   id: string
   project: string
   name: string
+  config: Record<string, unknown>
   started_at: number
   finished_at: number | null
 }
 
-function formatDuration(started: number, finished: number | null): string {
-  const end = finished ?? Date.now() / 1000
-  const secs = Math.round(end - started)
-  if (secs < 60) return `${secs}s`
-  return `${Math.floor(secs / 60)}m ${secs % 60}s`
-}
-
-async function fetchRuns(): Promise<RunSummary[]> {
+async function fetchAllRuns(): Promise<RunSummary[]> {
   const res = await fetch(`${SERVER_URL}/runs`)
   if (!res.ok) throw new Error('Failed to fetch runs')
   return res.json()
 }
 
-function StatusBadge({ finished }: { finished: boolean }) {
-  if (finished) {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-[var(--color-good)] text-xs font-medium">
-        <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-good)]" />
-        finished
-      </span>
-    )
-  }
-  return (
-    <span className="inline-flex items-center gap-1.5 text-[var(--color-accent)] text-xs font-medium">
-      <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] pulse-dot" />
-      running
-    </span>
-  )
-}
+type Tab = 'workspace' | 'runs' | 'registry' | 'leaderboard'
+
+const NAV_ITEMS: { id: Tab; label: string; icon: JSX.Element }[] = [
+  {
+    id: 'workspace',
+    label: 'Workspace',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'runs',
+    label: 'Runs',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M3 6h18M3 12h18M3 18h18" />
+      </svg>
+    ),
+  },
+  {
+    id: 'registry',
+    label: 'Registry',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M12 2 3 7v10l9 5 9-5V7z" />
+        <path d="M3 7l9 5 9-5M12 12v10" />
+      </svg>
+    ),
+  },
+  {
+    id: 'leaderboard',
+    label: 'Leaderboard',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z" />
+        <path d="M7 6H3v2a4 4 0 0 0 4 4M17 6h4v2a4 4 0 0 1-4 4" />
+      </svg>
+    ),
+  },
+]
 
 function App() {
+  const [activeTab, setActiveTab] = useState<Tab>('workspace')
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'runs' | 'registry' | 'leaderboard'>('runs')
-  const { data: runs, isLoading, error } = useQuery({
+  const [selectedProject, setSelectedProject] = useState<string | null>(null)
+
+  const { data: allRuns, error } = useQuery({
     queryKey: ['runs'],
-    queryFn: fetchRuns,
-    refetchInterval: 2000,
+    queryFn: fetchAllRuns,
+    refetchInterval: 3000,
   })
 
-  return (
-    <div className="min-h-screen">
-      <header className="border-b border-[var(--color-border)] px-6 py-5 sm:px-10">
-        <div className="max-w-5xl mx-auto">
-          <h1 className="text-xl font-semibold tracking-tight">vantrace</h1>
-          <div className="h-px w-16 mt-2 bg-gradient-to-r from-[var(--color-accent)] to-transparent" />
-          <p className="text-[var(--color-muted)] text-sm mt-3">
-            Local-first experiment tracking
+  const projects = useMemo(() => {
+    if (!allRuns) return []
+    return Array.from(new Set(allRuns.map((r) => r.project))).sort()
+  }, [allRuns])
+
+  const activeProject = selectedProject ?? projects[0] ?? null
+
+  function goToRun(id: string) {
+    setSelectedRunId(id)
+  }
+
+  function renderMain() {
+    if (selectedRunId) {
+      return <RunDetail runId={selectedRunId} onBack={() => setSelectedRunId(null)} />
+    }
+    if (error) {
+      return (
+        <div className="border border-[var(--color-border)] rounded-lg p-6 text-sm max-w-md">
+          <p className="text-red-700 font-medium mb-1">Can't reach the server</p>
+          <p className="text-[var(--color-muted)]">
+            No response from {SERVER_URL}. Start it with{' '}
+            <code className="font-mono bg-[var(--color-surface)] px-1.5 py-0.5 rounded">go run .</code>{' '}
+            inside vantrace-server.
           </p>
-          <div className="flex gap-1 mt-5">
-            <button
-              onClick={() => { setActiveTab('runs'); setSelectedRunId(null) }}
-              className={`text-sm px-3 py-1.5 rounded-md transition-colors ${
-                activeTab === 'runs'
-                  ? 'bg-[var(--color-surface)] text-[var(--color-ink)]'
-                  : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'
-              }`}
-            >
-              Runs
-            </button>
-            <button
-              onClick={() => setActiveTab('registry')}
-              className={`text-sm px-3 py-1.5 rounded-md transition-colors ${
-                activeTab === 'registry'
-                  ? 'bg-[var(--color-surface)] text-[var(--color-ink)]'
-                  : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'
-              }`}
-            >
-              Registry
-            </button>
-            <button
-              onClick={() => setActiveTab('leaderboard')}
-              className={`text-sm px-3 py-1.5 rounded-md transition-colors ${
-                activeTab === 'leaderboard'
-                  ? 'bg-[var(--color-surface)] text-[var(--color-ink)]'
-                  : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'
-              }`}
-            >
-              Leaderboard
-            </button>
-          </div>
         </div>
-      </header>
+      )
+    }
+    if (!activeProject) {
+      return (
+        <div className="border border-dashed border-[var(--color-border)] rounded-lg p-10 text-center max-w-md">
+          <p className="text-[var(--color-muted)] text-sm">
+            No runs yet. Log one with <code className="font-mono">vantrace.init()</code>.
+          </p>
+        </div>
+      )
+    }
+    switch (activeTab) {
+      case 'workspace':
+        return <Workspace project={activeProject} />
+      case 'runs':
+        return <RunsTable project={activeProject} onSelectRun={goToRun} />
+      case 'registry':
+        return <Registry project={activeProject} />
+      case 'leaderboard':
+        return <Leaderboard project={activeProject} />
+    }
+  }
 
-      <main className="max-w-5xl mx-auto px-6 py-8 sm:px-10">
-        {activeTab === 'registry' ? (
-          <Registry />
-        ) : activeTab === 'leaderboard' ? (
-          <Leaderboard />
-        ) : selectedRunId ? (
-          <RunDetail runId={selectedRunId} onBack={() => setSelectedRunId(null)} />
-        ) : (
-          <>
-            {isLoading && (
-              <p className="text-[var(--color-muted)] text-sm">Loading runs…</p>
-            )}
+  return (
+    <div className="min-h-screen flex">
+      {/* Left nav rail */}
+      <aside className="w-56 shrink-0 border-r border-[var(--color-border)] flex flex-col h-screen sticky top-0">
+        <div className="px-5 py-5">
+          <h1 className="text-lg font-semibold tracking-tight">vantrace</h1>
+          <div className="h-px w-12 mt-2 bg-gradient-to-r from-[var(--color-accent)] to-transparent" />
+        </div>
 
-            {error && (
-              <div className="border border-[var(--color-border)] rounded-lg p-6 text-sm">
-                <p className="text-red-400 font-medium mb-1">Can't reach the server</p>
-                <p className="text-[var(--color-muted)]">
-                  No response from {SERVER_URL}. Start it with{' '}
-                  <code className="font-mono bg-[var(--color-surface)] px-1.5 py-0.5 rounded">
-                    go run .
-                  </code>{' '}
-                  inside vantrace-server.
-                </p>
-              </div>
-            )}
+        <div className="px-5 mb-4">
+          <label className="text-[10px] uppercase tracking-wide text-[var(--color-muted)] block mb-1.5">
+            Project
+          </label>
+          <select
+            value={activeProject ?? ''}
+            onChange={(e) => { setSelectedProject(e.target.value); setSelectedRunId(null) }}
+            disabled={projects.length === 0}
+            className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md px-2.5 py-1.5 text-xs text-[var(--color-ink)] disabled:opacity-40"
+          >
+            {projects.length === 0 && <option>—</option>}
+            {projects.map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+        </div>
 
-            {runs && runs.length === 0 && (
-              <div className="border border-dashed border-[var(--color-border)] rounded-lg p-10 text-center">
-                <p className="text-[var(--color-muted)] text-sm">
-                  No runs yet. Log one with{' '}
-                  <code className="font-mono">vantrace.init()</code>.
-                </p>
-              </div>
-            )}
+        <nav className="px-3 flex flex-col gap-0.5">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => { setActiveTab(item.id); setSelectedRunId(null) }}
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-left transition-colors ${
+                activeTab === item.id && !selectedRunId
+                  ? 'bg-[var(--color-surface)] text-[var(--color-ink)]'
+                  : 'text-[var(--color-muted)] hover:text-[var(--color-ink)] hover:bg-[var(--color-surface)]/50'
+              }`}
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ))}
+        </nav>
 
-            {runs && runs.length > 0 && (
-              <div className="border border-[var(--color-border)] rounded-lg overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm min-w-[520px]">
-                    <thead>
-                      <tr className="text-left text-[var(--color-muted)] text-xs uppercase tracking-wide border-b border-[var(--color-border)]">
-                        <th className="py-3 px-4 font-medium">Project</th>
-                        <th className="py-3 px-4 font-medium">Run</th>
-                        <th className="py-3 px-4 font-medium">Status</th>
-                        <th className="py-3 px-4 font-medium">Duration</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {runs.map((run) => (
-                        <tr
-                          key={run.id}
-                          onClick={() => setSelectedRunId(run.id)}
-                          className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface)] cursor-pointer transition-colors"
-                        >
-                          <td className="py-3 px-4">{run.project}</td>
-                          <td className="py-3 px-4 font-mono text-[var(--color-ink)]">
-                            {run.name || run.id}
-                          </td>
-                          <td className="py-3 px-4">
-                            <StatusBadge finished={!!run.finished_at} />
-                          </td>
-                          <td className="py-3 px-4 text-[var(--color-muted)] font-mono text-xs">
-                            {formatDuration(run.started_at, run.finished_at)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </>
-        )}
+        <div className="mt-auto px-5 py-4 text-[10px] text-[var(--color-muted)]">
+          local-first · v0.3.1
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <main className="flex-1 px-8 py-8 sm:px-10 overflow-x-auto">
+        {renderMain()}
       </main>
     </div>
   )
