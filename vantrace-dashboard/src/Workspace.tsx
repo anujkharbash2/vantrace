@@ -42,23 +42,23 @@ function StatusDot({ finished }: { finished: boolean }) {
   )
 }
 
+function formatGroupValue(v: unknown): string {
+  if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(4)
+  return String(v)
+}
+
 interface RunWithColor {
   run: RunSummary
   color: string
+  groupLabel: string | null
 }
 
-// Builds uPlot-ready aligned data for ONE metric across MULTIPLE runs.
-// x-axis = logged ORDER (1st point, 2nd point, ...) not raw step —
-// this keeps runs comparable even when batch size changes how many
-// steps happen per epoch.
 function buildAlignedData(
   metricKey: string,
-  runsWithMetrics: { run: RunSummary; color: string; metrics: MetricPoint[] }[]
+  runsWithMetrics: { run: RunSummary; color: string; groupLabel: string | null; metrics: MetricPoint[] }[]
 ): { data: uPlot.AlignedData; series: uPlot.Series[] } {
   const perRunValues: (number | null)[][] = runsWithMetrics.map(({ metrics }) => {
-    const points = metrics
-      .filter((p) => p.key === metricKey)
-      .sort((a, b) => a.step - b.step)
+    const points = metrics.filter((p) => p.key === metricKey).sort((a, b) => a.step - b.step)
     return points.map((p) => p.value)
   })
 
@@ -71,8 +71,8 @@ function buildAlignedData(
 
   const series: uPlot.Series[] = [
     {},
-    ...runsWithMetrics.map(({ run, color }) => ({
-      label: run.name || run.id,
+    ...runsWithMetrics.map(({ run, color, groupLabel }) => ({
+      label: groupLabel ? `${run.name || run.id} (${groupLabel})` : run.name || run.id,
       stroke: color,
       width: 2,
       points: { show: false },
@@ -88,7 +88,7 @@ function OverlayChart({
   runsWithMetrics,
 }: {
   metricKey: string
-  runsWithMetrics: { run: RunSummary; color: string; metrics: MetricPoint[] }[]
+  runsWithMetrics: { run: RunSummary; color: string; groupLabel: string | null; metrics: MetricPoint[] }[]
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const plotRef = useRef<uPlot | null>(null)
@@ -100,12 +100,10 @@ function OverlayChart({
 
   useEffect(() => {
     if (!wrapperRef.current) return
-
     if (plotRef.current) {
       plotRef.current.destroy()
       plotRef.current = null
     }
-
     const opts: uPlot.Options = {
       width: wrapperRef.current.clientWidth,
       height: 240,
@@ -122,9 +120,7 @@ function OverlayChart({
 
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width
-      if (width && plotRef.current) {
-        plotRef.current.setSize({ width, height: 240 })
-      }
+      if (width && plotRef.current) plotRef.current.setSize({ width, height: 240 })
     })
     observer.observe(wrapperRef.current)
 
@@ -137,9 +133,7 @@ function OverlayChart({
   }, [metricKey, runsWithMetrics.map((r) => r.run.id).join(',')])
 
   useEffect(() => {
-    if (plotRef.current) {
-      plotRef.current.setData(data)
-    }
+    if (plotRef.current) plotRef.current.setData(data)
   }, [data])
 
   return (
@@ -151,6 +145,8 @@ function OverlayChart({
 
 export function Workspace({ project }: { project: string }) {
   const [visibleRunIds, setVisibleRunIds] = useState<Set<string>>(new Set())
+  const [searchFilter, setSearchFilter] = useState('')
+  const [groupByKey, setGroupByKey] = useState<string | null>(null)
 
   const { data: projectRuns } = useQuery({
     queryKey: ['workspace-runs', project],
@@ -162,16 +158,58 @@ export function Workspace({ project }: { project: string }) {
     if (projectRuns && projectRuns.length > 0) {
       setVisibleRunIds(new Set(projectRuns.map((r) => r.id)))
     }
+    setGroupByKey(null)
+    setSearchFilter('')
   }, [project, projectRuns?.length])
 
+  const configKeys = useMemo(() => {
+    if (!projectRuns) return []
+    const keys = new Set<string>()
+    projectRuns.forEach((r) => Object.keys(r.config || {}).forEach((k) => keys.add(k)))
+    return Array.from(keys).sort()
+  }, [projectRuns])
+
+  // when grouping, distinct group values share a color; ungrouped runs get per-run colors
   const runsWithColor: RunWithColor[] = useMemo(() => {
     if (!projectRuns) return []
-    return projectRuns.map((run, i) => ({ run, color: colorForIndex(i) }))
-  }, [projectRuns])
+
+    if (!groupByKey) {
+      return projectRuns.map((run, i) => ({ run, color: colorForIndex(i), groupLabel: null }))
+    }
+
+    const groupValues = Array.from(
+      new Set(projectRuns.map((r) => formatGroupValue(r.config?.[groupByKey] ?? '—')))
+    ).sort()
+    const colorForGroup = new Map(groupValues.map((v, i) => [v, colorForIndex(i)]))
+
+    return projectRuns.map((run) => {
+      const label = formatGroupValue(run.config?.[groupByKey] ?? '—')
+      return { run, color: colorForGroup.get(label)!, groupLabel: `${groupByKey}=${label}` }
+    })
+  }, [projectRuns, groupByKey])
+
+  const filteredRuns = useMemo(() => {
+    if (!searchFilter.trim()) return runsWithColor
+    const q = searchFilter.toLowerCase()
+    return runsWithColor.filter(
+      ({ run }) => (run.name || run.id).toLowerCase().includes(q)
+    )
+  }, [runsWithColor, searchFilter])
+
+  // group the sidebar list into sections when grouping is active
+  const groupedSections = useMemo(() => {
+    if (!groupByKey) return null
+    const sections = new Map<string, RunWithColor[]>()
+    for (const rc of filteredRuns) {
+      const label = rc.groupLabel!
+      if (!sections.has(label)) sections.set(label, [])
+      sections.get(label)!.push(rc)
+    }
+    return Array.from(sections.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+  }, [filteredRuns, groupByKey])
 
   const visibleRunsWithColor = runsWithColor.filter(({ run }) => visibleRunIds.has(run.id))
 
-  // fetch metrics for every VISIBLE run in parallel
   const metricsQueries = useQueries({
     queries: visibleRunsWithColor.map(({ run }) => ({
       queryKey: ['workspace-metrics', run.id],
@@ -181,10 +219,7 @@ export function Workspace({ project }: { project: string }) {
   })
 
   const runsWithMetrics = useMemo(() => {
-    return visibleRunsWithColor.map((rc, i) => ({
-      ...rc,
-      metrics: metricsQueries[i]?.data ?? [],
-    }))
+    return visibleRunsWithColor.map((rc, i) => ({ ...rc, metrics: metricsQueries[i]?.data ?? [] }))
   }, [visibleRunsWithColor, metricsQueries])
 
   const allMetricKeys = useMemo(() => {
@@ -204,6 +239,16 @@ export function Workspace({ project }: { project: string }) {
     })
   }
 
+  function toggleGroup(runs: RunWithColor[]) {
+    const ids = runs.map((r) => r.run.id)
+    const allVisible = ids.every((id) => visibleRunIds.has(id))
+    setVisibleRunIds((prev) => {
+      const next = new Set(prev)
+      ids.forEach((id) => (allVisible ? next.delete(id) : next.add(id)))
+      return next
+    })
+  }
+
   function selectAll() {
     if (!projectRuns) return
     setVisibleRunIds(new Set(projectRuns.map((r) => r.id)))
@@ -213,12 +258,58 @@ export function Workspace({ project }: { project: string }) {
     setVisibleRunIds(new Set())
   }
 
+  function RunRow({ run, color }: RunWithColor) {
+    const isVisible = visibleRunIds.has(run.id)
+    return (
+      <label
+        key={run.id}
+        className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[var(--color-base)] cursor-pointer"
+      >
+        <input type="checkbox" checked={isVisible} onChange={() => toggleRun(run.id)} className="sr-only" />
+        <span
+          className="w-2.5 h-2.5 rounded-full shrink-0 transition-opacity"
+          style={{ backgroundColor: color, opacity: isVisible ? 1 : 0.25 }}
+        />
+        <span className={`text-xs font-mono truncate flex-1 ${isVisible ? 'text-[var(--color-ink)]' : 'text-[var(--color-muted)]'}`}>
+          {run.name || run.id}
+        </span>
+        <StatusDot finished={!!run.finished_at} />
+      </label>
+    )
+  }
+
   return (
     <div className="flex gap-6 -my-8">
-      <div className="w-60 shrink-0 border-r border-[var(--color-border)] py-8 pr-4">
+      <div className="w-64 shrink-0 border-r border-[var(--color-border)] py-8 pr-4">
+        <input
+          type="text"
+          placeholder="Filter runs…"
+          value={searchFilter}
+          onChange={(e) => setSearchFilter(e.target.value)}
+          className="w-full bg-[var(--color-base)] border border-[var(--color-border)] rounded-md px-2.5 py-1.5 text-xs text-[var(--color-ink)] mb-3 placeholder:text-[var(--color-muted)]"
+        />
+
+        {configKeys.length > 0 && (
+          <div className="mb-3">
+            <label className="text-[10px] uppercase tracking-wide text-[var(--color-muted)] block mb-1">
+              Group by
+            </label>
+            <select
+              value={groupByKey ?? ''}
+              onChange={(e) => setGroupByKey(e.target.value || null)}
+              className="w-full bg-[var(--color-base)] border border-[var(--color-border)] rounded-md px-2.5 py-1.5 text-xs text-[var(--color-ink)]"
+            >
+              <option value="">None</option>
+              {configKeys.map((k) => (
+                <option key={k} value={k}>{k}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs uppercase tracking-wide text-[var(--color-muted)]">
-            Runs ({runsWithColor.length})
+            Runs ({filteredRuns.length})
           </span>
           <div className="flex gap-2">
             <button onClick={selectAll} className="text-xs text-[var(--color-muted)] hover:text-[var(--color-accent)]">all</button>
@@ -226,32 +317,34 @@ export function Workspace({ project }: { project: string }) {
           </div>
         </div>
 
-        <div className="space-y-1 max-h-[calc(100vh-200px)] overflow-y-auto">
-          {runsWithColor.map(({ run, color }) => {
-            const isVisible = visibleRunIds.has(run.id)
-            return (
-              <label
-                key={run.id}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[var(--color-base)] cursor-pointer"
-              >
-                <input type="checkbox" checked={isVisible} onChange={() => toggleRun(run.id)} className="sr-only" />
-                <span
-                  className="w-2.5 h-2.5 rounded-full shrink-0 transition-opacity"
-                  style={{ backgroundColor: color, opacity: isVisible ? 1 : 0.25 }}
-                />
-                <span className={`text-xs font-mono truncate flex-1 ${isVisible ? 'text-[var(--color-ink)]' : 'text-[var(--color-muted)]'}`}>
-                  {run.name || run.id}
-                </span>
-                <StatusDot finished={!!run.finished_at} />
-              </label>
-            )
-          })}
+        <div className="space-y-1 max-h-[calc(100vh-280px)] overflow-y-auto">
+          {!groupByKey &&
+            filteredRuns.map((rc) => <RunRow key={rc.run.id} {...rc} />)}
+
+          {groupByKey &&
+            groupedSections?.map(([label, runs]) => (
+              <div key={label} className="mb-2">
+                <button
+                  onClick={() => toggleGroup(runs)}
+                  className="flex items-center gap-2 w-full px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+                >
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: runs[0].color }} />
+                  {label} ({runs.length})
+                </button>
+                {runs.map((rc) => <RunRow key={rc.run.id} {...rc} />)}
+              </div>
+            ))}
+
+          {filteredRuns.length === 0 && (
+            <p className="text-xs text-[var(--color-muted)] px-2 py-1.5">No runs match.</p>
+          )}
         </div>
       </div>
 
       <div className="flex-1 py-8 min-w-0">
         <p className="text-xs uppercase tracking-wide text-[var(--color-muted)] mb-4">
           {visibleRunIds.size} run{visibleRunIds.size !== 1 ? 's' : ''} selected
+          {groupByKey && ` · grouped by ${groupByKey}`}
         </p>
 
         {visibleRunIds.size === 0 && (
