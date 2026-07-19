@@ -10,7 +10,7 @@ from pathlib import Path
 
 import requests
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 _DB_DIR = Path.home() / ".vantrace" / "runs"
 _SERVER_URL = "http://localhost:6789"
